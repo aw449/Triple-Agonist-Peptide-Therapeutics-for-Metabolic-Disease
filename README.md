@@ -4,7 +4,7 @@ A comprehensive machine learning framework for designing peptides with enhanced 
 
 ## Project Overview
 
-This project implements state-of-the-art machine learning approaches for multi-target peptide design, specifically focusing on GCGR and GLP-1R receptor targeting. The pipeline combines advanced neural network architectures with evolutionary optimization to discover novel peptide sequences with enhanced biological potency.
+This project implements state-of-the-art machine learning approaches for multi-target peptide design, specifically focusing on GCGR, GLP-1R, and GIPR receptor targeting. The pipeline combines advanced neural network architectures with evolutionary optimization to discover novel peptide sequences with enhanced biological potency.
 
 ## Key Features
 
@@ -205,28 +205,13 @@ peptide-design-project/
 ├── peptide_comparison.py          # GNN vs CNN comparison
 ├── peptide_genetic_algorithm.py   # Genetic algorithm optimization
 ├── peptide_analysis.py            # Comprehensive analysis pipeline
-├── data/
-│   ├── training_data.csv          # Training sequences
-│   ├── validation_sequences.csv   # Validation set
-│   └── all_sequences_aligned.csv  # Complete dataset
+├── training_data.csv          # Training sequences
+├── validation_sequences.csv   # Validation set
+└── all_sequences_aligned.csv  # Complete dataset
 ├── models/                        # Trained model checkpoints
 ├── results/                       # Output results and plots
-├── config/                        # Configuration files
-└── utils/                         # Utility functions
 ```
 
-## Citation
-
-If you use this work in your research, please cite:
-
-```bibtex
-@article{peptide_design_2024,
-  title={Multi-Target Peptide Design Using Graph Neural Networks and Genetic Algorithms},
-  author={[Authors]},
-  journal={[Journal]},
-  year={2024}
-}
-```
 
 ## Contributing
 
@@ -241,7 +226,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Contact
 
-For questions and collaborations, please contact [contact-email].
+For questions and collaborations, please contact awong16@illinois.edu.
 
 ---
 
