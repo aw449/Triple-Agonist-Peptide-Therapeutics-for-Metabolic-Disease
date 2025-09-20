@@ -88,7 +88,6 @@ This project implements state-of-the-art machine learning approaches for multi-t
 - Molecular weight and charge distribution
 - Lipophilicity and membrane permeability
 - Metabolic stability prediction
-- Toxicity risk assessment
 
 ## Dataset Description
 
