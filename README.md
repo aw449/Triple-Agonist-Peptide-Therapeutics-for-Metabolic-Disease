@@ -51,6 +51,48 @@ This project implements state-of-the-art machine learning approaches for multi-t
 - CNN approaches provide computational efficiency
 - Hybrid approaches show superior performance
 
+### 3. GNN Validation with `gat_validation.py` and `known_peptides_evaluation.py`
+
+
+#### Scripts:
+
+**`gat_validation.py`** - Benchmark Validation
+- Tests model performance on novel sequences (≤80% similarity to training data)  
+- Validates against complete test set regardless of similarity
+- Computes sequence similarity distributions and filtering statistics
+- Generates comparative performance analysis across similarity thresholds
+
+**`known_peptides_evaluation.py`** - Independent Validation  
+- Evaluates predictions against literature-reported peptides without activities
+- Maps qualitative activity labels (high/low) to binary classifications
+- Produces publication-ready comparison tables with agreement analysis
+- Highlights prediction disagreements for model reliability assessment
+
+#### Key Features:
+- **Similarity-based filtering** ensures proper generalization testing
+- **NSAA mapping** handles non-standard amino acids in real peptide sequences  
+- **Ensemble prediction** aggregates results across multiple model folds
+- **Statistical comparison** between novel vs. similar sequence performance
+
+#### Input:
+- Trained GAT ensemble models from k-fold cross-validation
+- Independent validation sequences with EC50 measurements
+- Known peptide database with literature activities
+- Training data for consistent feature normalization
+
+#### Output:
+- Performance metrics (AUC-ROC, F1, precision, recall) for different similarity ranges
+- Sequence similarity analysis plots and statistics
+- Comparative performance visualizations
+- Publication-ready evaluation tables
+- Model generalization assessment reports
+
+#### Key Insights:
+- Quantifies performance degradation with sequence novelty
+- Identifies target-specific generalization capabilities  
+- Validates model reliability against established peptide pharmacology
+- Provides statistical evidence for model trustworthiness on unseen data
+
 ### 3. Genetic Algorithm Generation
 
 **Purpose**: Evolutionary optimization of peptide sequences using ML-guided fitness functions
