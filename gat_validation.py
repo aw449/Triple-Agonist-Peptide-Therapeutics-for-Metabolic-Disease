@@ -561,7 +561,7 @@ def plot_comparative_performance(novel_results: Dict[str, Dict],
     plt.suptitle('Performance Comparison: Novel Sequences vs Complete Validation Set', 
                  fontsize=16, fontweight='bold')
     plt.tight_layout()
-    plt.savefig('comparative_performance_main.png', dpi=300, bbox_inches='tight')
+    plt.savefig('comparative_performance_main_new.png', dpi=300, bbox_inches='tight')
     plt.show()
     
     # Second figure: Remaining metrics
@@ -629,7 +629,7 @@ def plot_comparative_performance(novel_results: Dict[str, Dict],
     plt.suptitle('Novel Sequences vs Complete Validation Set', 
                  fontsize=16, fontweight='bold')
     plt.tight_layout()
-    plt.savefig('comparative_performance_additional.png', dpi=300, bbox_inches='tight')
+    plt.savefig('comparative_performance_additional_new.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 

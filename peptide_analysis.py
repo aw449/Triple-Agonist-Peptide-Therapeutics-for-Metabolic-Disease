@@ -12,6 +12,8 @@ import json
 import ast
 from collections import Counter, defaultdict
 import warnings
+import matplotlib.patches as mpatches
+from matplotlib.gridspec import GridSpec
 warnings.filterwarnings('ignore')
 
 # RDKit for molecular property calculations
@@ -368,40 +370,54 @@ class PeptideAnalyzer:
         return True
     
     def create_sequence_alignment_visualization(self):
-        """Create colored sequence alignment visualization with pairwise combination colors."""
-        print("\nCreating sequence alignment visualization...")
-        
+        """
+        Create a publication-quality sequence alignment visualization
+        using an upgraded version of the original code's logic.
+        """
+        print("\nCreating upgraded sequence alignment visualization...")
+
+        # Define a new, more distinct color map for publication
+        color_map = {
+            'all_three': '#B30000',      # Darker Red
+            'glp1_glucagon': '#FF8C00',  # Darker Orange
+            'gip_glucagon': '#00BFFF',   # Deep Sky Blue
+            'glp1_gip': '#DA70D6',       # Orchid
+            'glp1_only': '#0000CD',      # Medium Blue
+            'gip_only': '#008000',       # Dark Green
+            'glucagon_only': '#4B0082',  # Indigo
+            'unique': '#A9A9A9',         # Dark Gray
+            'gap': 'white'
+        }
+
         # Get sequences for alignment
         top_20_seqs = self.df.head(20)['sequence'].tolist()
         all_sequences = {
-            **{f'Rank_{i+1}': seq for i, seq in enumerate(top_20_seqs)},
+            **{f'Rank {i+1}': seq for i, seq in enumerate(top_20_seqs)},
             **self.native_sequences
         }
-        
+
         # Parse sequences into tokens (handling NSAAs)
         parsed_sequences = {}
         max_len = 0
-        
         for label, seq in all_sequences.items():
             tokens = self._parse_sequence_with_nsaa(seq)
             parsed_sequences[label] = tokens
             max_len = max(max_len, len(tokens))
-        
+
         # Create alignment matrix
         alignment_data = []
         sequence_labels = []
-        
         for label, tokens in parsed_sequences.items():
             padded_tokens = tokens + ['-'] * (max_len - len(tokens))
             alignment_data.append(padded_tokens)
             sequence_labels.append(label)
-        
-        # Enhanced color mapping for amino acids with pairwise combinations
-        def get_aa_color(token, position, seq_label):
+
+        def get_color_key(token, position, seq_label):
             if token == '-':
-                return 'white'
-            
-            # Convert NSAA to standard for comparison
+                return 'gap'
+
+            # Convert NSAA to standard AA for comparison (replicated logic)
+            aa = token
             if token.startswith('[') and token.endswith(']'):
                 if token.startswith('[K('):
                     aa = 'K'
@@ -409,67 +425,61 @@ class PeptideAnalyzer:
                     aa = self.nsaa_mapping[token]
                 else:
                     aa = 'A'
-            else:
-                aa = token
             
-            # Get amino acids at this position for each native sequence
+            # Get native AAs at this position (replicated logic)
             native_aas = {}
             native_order = ['GLP1', 'GIP', 'Glucagon']
-            
             for native_label in native_order:
                 if native_label in self.native_sequences:
                     native_tokens = self._parse_sequence_with_nsaa(self.native_sequences[native_label])
                     if position < len(native_tokens):
                         native_token = native_tokens[position]
-                        # Convert NSAA to standard for comparison
+                        native_aa = native_token
                         if native_token.startswith('[') and native_token.endswith(']'):
                             if native_token.startswith('[K('):
-                                native_aas[native_label] = 'K'
+                                native_aa = 'K'
                             elif native_token in self.nsaa_mapping:
-                                native_aas[native_label] = self.nsaa_mapping[native_token]
+                                native_aa = self.nsaa_mapping[native_token]
                             else:
-                                native_aas[native_label] = 'A'
-                        else:
-                            native_aas[native_label] = native_token
+                                native_aa = 'A'
+                        native_aas[native_label] = native_aa
                     else:
                         native_aas[native_label] = '-'
             
-            # Only color designed sequences (Rank_X), not the native references
-            if seq_label.startswith('Rank_'):
-                # Check which natives match this amino acid
-                matches = []
-                for native_label, native_aa in native_aas.items():
-                    if aa == native_aa:
-                        matches.append(native_label)
-                
-                # Color based on match pattern
-                if len(matches) == 3:  # All three natives
-                    return 'red'
-                elif len(matches) == 2:  # Pairwise combinations
+            # Only color designed sequences (Rank X)
+            if seq_label.startswith('Rank'):
+                matches = [native_label for native_label, native_aa in native_aas.items() if aa == native_aa]
+
+                if len(matches) == 3:
+                    return 'all_three'
+                elif len(matches) == 2:
                     if 'GLP1' in matches and 'Glucagon' in matches:
-                        return 'orange'  # GLP1 + Glucagon
+                        return 'glp1_glucagon'
                     elif 'GIP' in matches and 'Glucagon' in matches:
-                        return 'cyan'    # GIP + Glucagon
+                        return 'gip_glucagon'
                     elif 'GLP1' in matches and 'GIP' in matches:
-                        return 'magenta' # GLP1 + GIP
-                elif len(matches) == 1:  # Single matches
+                        return 'glp1_gip'
+                elif len(matches) == 1:
                     if 'GLP1' in matches:
-                        return 'blue'
+                        return 'glp1_only'
                     elif 'GIP' in matches:
-                        return 'green'
+                        return 'gip_only'
                     elif 'Glucagon' in matches:
-                        return 'purple'
-            
-            return 'lightgray'  # Unique or native sequence
-        
+                        return 'glucagon_only'
+                else:
+                    return 'unique'
+            return 'gap'
+
         # Create visualization
-        fig, ax = plt.subplots(figsize=(22, 12))
-        
-        # Plot each sequence
+        fig, ax = plt.subplots(figsize=(18, 10))
+        plt.style.use('seaborn-v0_8-whitegrid')
+
         for i, (label, tokens) in enumerate(zip(sequence_labels, alignment_data)):
             for j, token in enumerate(tokens):
-                color = get_aa_color(token, j, label)
-                rect = plt.Rectangle((j, i), 1, 1, facecolor=color, edgecolor='black', linewidth=0.1)
+                color_key = get_color_key(token, j, label)
+                color = color_map.get(color_key, 'white')
+                
+                rect = plt.Rectangle((j, i), 1, 1, facecolor=color, edgecolor='#C0C0C0', linewidth=0.5)
                 ax.add_patch(rect)
                 
                 if token != '-':
@@ -481,130 +491,355 @@ class PeptideAnalyzer:
                         display_token = token
                         fontsize = 8
                     
-                    ax.text(j+0.5, i+0.5, display_token, ha='center', va='center', 
-                        fontsize=fontsize, weight='bold')
-        
+                    # Use a color for the text that provides good contrast
+                    text_color = 'black'
+                    if color_key in ['all_three', 'glucagon_only']:
+                        text_color = 'white'
+                    
+                    ax.text(j + 0.5, i + 0.5, display_token, ha='center', va='center',
+                            fontsize=fontsize, weight='bold', color=text_color)
+
+        # Set axes and labels
         ax.set_xlim(0, max_len)
         ax.set_ylim(0, len(sequence_labels))
+        ax.set_xticks(range(max_len))
+        ax.set_xticklabels([str(pos + 1) for pos in range(max_len)], fontsize=8)
         ax.set_yticks([i + 0.5 for i in range(len(sequence_labels))])
-        ax.set_yticklabels([label.replace('_', ' ') for label in sequence_labels], va='center')
-        ax.set_xlabel('Position')
-        ax.set_title('Sequence Alignment: Top 20 GA Peptides vs Native Sequences')
-        
-        # Enhanced legend with pairwise combinations
+        ax.set_yticklabels([label.replace('_', ' ') for label in sequence_labels], va='center', fontsize=9)
+        ax.tick_params(axis='both', which='both', length=0)
+
+        ax.set_xlabel('Sequence Position', fontsize=12, weight='bold')
+        ax.set_title('Alignment of Top 20 GA Peptides to Native Sequences', fontsize=16, weight='bold')
+
+        # Enhanced legend with patches
         legend_elements = [
-            plt.Rectangle((0,0),1,1, facecolor='red', label='All 3 Natives (GLP1+GIP+Glucagon)'),
-            plt.Rectangle((0,0),1,1, facecolor='orange', label='GLP1 + Glucagon'),
-            plt.Rectangle((0,0),1,1, facecolor='cyan', label='GIP + Glucagon'), 
-            plt.Rectangle((0,0),1,1, facecolor='magenta', label='GLP1 + GIP'),
-            plt.Rectangle((0,0),1,1, facecolor='blue', label='GLP1 Only'),
-            plt.Rectangle((0,0),1,1, facecolor='green', label='GIP Only'),
-            plt.Rectangle((0,0),1,1, facecolor='purple', label='Glucagon Only'),
-            plt.Rectangle((0,0),1,1, facecolor='lightgray', label='Unique')
+            mpatches.Patch(color=color_map['all_three'], label='All 3 Natives (GLP-1, GIP, Glucagon)'),
+            mpatches.Patch(color=color_map['glp1_gip'], label='GLP-1 & GIP'),
+            mpatches.Patch(color=color_map['glp1_glucagon'], label='GLP-1 & Glucagon'),
+            mpatches.Patch(color=color_map['gip_glucagon'], label='GIP & Glucagon'),
+            mpatches.Patch(color=color_map['glp1_only'], label='GLP-1 Only'),
+            mpatches.Patch(color=color_map['gip_only'], label='GIP Only'),
+            mpatches.Patch(color=color_map['glucagon_only'], label='Glucagon Only'),
+            mpatches.Patch(color=color_map['unique'], label='Unique')
         ]
-        ax.legend(handles=legend_elements, loc='best', bbox_to_anchor=(1, 1))
-        
-        plt.tight_layout()
-        plt.savefig(self.output_dir / 'sequence_alignment.png', dpi=300, bbox_inches='tight')
+        ax.legend(handles=legend_elements, title='Conservation Pattern', 
+                bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0., fontsize=10, title_fontsize=12)
+
+        plt.tight_layout(rect=[0, 0, 0.85, 1])
+        plt.savefig(self.output_dir / 'sequence_alignment_publication.png', dpi=600, bbox_inches='tight')
         plt.close()
+
+        print("Upgraded sequence alignment visualization saved successfully.")
+
+    def analyze_sequence_similarity_to_training(self):
+        """Analyze highest sequence similarity for each top 20 candidate to training sequences."""
+        print("\nAnalyzing sequence similarity to training dataset...")
         
-        print("Enhanced sequence alignment visualization saved with pairwise conservation analysis")
-        
-        # Print NSAA mapping
-        if self.nsaa_display:
-            print("\nNSAA Display Character Mapping:")
-            for nsaa, char in self.nsaa_display.items():
-                print(f"  {nsaa} → {char}")
-        
-        # Print conservation statistics
-        print("\nConservation Pattern Statistics:")
-        print("="*50)
-        
-        # Analyze conservation patterns
-        pattern_counts = {
-            'all_three': 0,
-            'glp1_glucagon': 0,
-            'gip_glucagon': 0, 
-            'glp1_gip': 0,
-            'glp1_only': 0,
-            'gip_only': 0,
-            'glucagon_only': 0,
-            'unique': 0
+        try:
+            # Load training data
+            train_df = pd.read_csv('all_sequences_aligned.csv')
+            train_sequences = train_df['sequence'].tolist()
+            print(f"Loaded {len(train_sequences)} training sequences")
+            
+            # Get our candidate sequences
+            candidate_sequences = self.df['sequence'].tolist()
+            
+            # Similarity analyzer with flexible edit distance calculation
+            class FlexibleSimilarityAnalyzer:
+                def tokenize_sequence(self, sequence):
+                    """Tokenize sequence preserving NSAA modifications."""
+                    import re
+                    pattern = r'\[[^\]]+\]|.'
+                    return re.findall(pattern, sequence)
+                
+                def calculate_sequence_similarity(self, seq1, seq2):
+                    """Calculate sequence similarity using edit distance (handles different lengths)."""
+                    tokens1 = self.tokenize_sequence(seq1)
+                    tokens2 = self.tokenize_sequence(seq2)
+                    
+                    if not tokens1 and not tokens2:
+                        return 1.0
+                    if not tokens1 or not tokens2:
+                        return 0.0
+                    
+                    # Calculate edit distance using dynamic programming
+                    len1, len2 = len(tokens1), len(tokens2)
+                    dp = [[0] * (len2 + 1) for _ in range(len1 + 1)]
+                    
+                    # Initialize base cases
+                    for i in range(len1 + 1):
+                        dp[i][0] = i
+                    for j in range(len2 + 1):
+                        dp[0][j] = j
+                    
+                    # Fill DP table
+                    for i in range(1, len1 + 1):
+                        for j in range(1, len2 + 1):
+                            if tokens1[i-1] == tokens2[j-1]:
+                                dp[i][j] = dp[i-1][j-1]  # Match
+                            else:
+                                dp[i][j] = 1 + min(
+                                    dp[i-1][j],    # Deletion
+                                    dp[i][j-1],    # Insertion
+                                    dp[i-1][j-1]   # Substitution
+                                )
+                    
+                    # Convert edit distance to similarity percentage
+                    max_len = max(len1, len2)
+                    edit_distance = dp[len1][len2]
+                    similarity = 1 - (edit_distance / max_len) if max_len > 0 else 1.0
+                    
+                    return similarity
+            
+            analyzer = FlexibleSimilarityAnalyzer()
+            
+            # Calculate highest similarity for each candidate
+            similarity_results = []
+            
+            for i, candidate_seq in enumerate(candidate_sequences):
+                print(f"Processing candidate {i+1}/{len(candidate_sequences)}")
+                
+                max_similarity = 0.0
+                best_match_id = ""
+                best_match_seq = ""
+                
+                # Find maximum similarity to any training sequence for this candidate
+                for j, train_seq in enumerate(train_sequences):
+                    similarity = analyzer.calculate_sequence_similarity(candidate_seq, train_seq)
+                    if similarity > max_similarity:
+                        max_similarity = similarity
+                        best_match_seq = train_seq
+                        if 'pep_ID' in train_df.columns:
+                            best_match_id = train_df.iloc[j]['pep_ID']
+                        else:
+                            best_match_id = f"train_seq_{j}"
+                
+                similarity_results.append({
+                    'peptide_rank': i + 1,
+                    'sequence': candidate_seq,
+                    'highest_similarity_percent': max_similarity * 100,
+                    'best_match_id': best_match_id,
+                    'best_match_sequence': best_match_seq,
+                    'fitness_score': self.df.iloc[i]['fitness_score']
+                })
+            
+            # Store results for summary report
+            self.results['similarity_analysis'] = {
+                'per_peptide_similarities': similarity_results
+            }
+            
+            # Save detailed results to CSV
+            similarity_df = pd.DataFrame(similarity_results)
+            similarity_df.to_csv(self.output_dir / 'per_peptide_similarity_analysis.csv', index=False)
+            
+            print(f"Sequence similarity analysis completed!")
+            print(f"Per-peptide similarity results:")
+            for result in similarity_results:
+                print(f"  Peptide {result['peptide_rank']}: {result['highest_similarity_percent']:.1f}% similarity")
+            
+        except Exception as e:
+            print(f"Error in similarity analysis: {e}")
+            print("Continuing with other analyses...")
+
+    def generate_hybrid_visualization(self):
+        """
+        Generate a hybrid sequence alignment visualization with a detailed grid
+        and a conservation bar chart below it. This provides both a qualitative
+        and quantitative view of peptide conservation.
+        """
+        print("\nCreating hybrid sequence alignment visualization...")
+
+        # Define the color map for the alignment grid
+        color_map = {
+            'all_three': '#B30000',      # Darker Red
+            'glp1_glucagon': '#FF8C00',  # Darker Orange
+            'gip_glucagon': '#00BFFF',   # Deep Sky Blue
+            'glp1_gip': '#DA70D6',       # Orchid
+            'glp1_only': '#0000CD',      # Medium Blue
+            'gip_only': '#008000',       # Dark Green
+            'glucagon_only': '#4B0082',  # Indigo
+            'unique': '#A9A9A9',         # Dark Gray
+            'gap': 'white'
+        }
+
+        # Get the sequences to be plotted (top 20 + 3 natives)
+        top_peptides_count = 20
+        top_peptides = self.df.head(top_peptides_count)['sequence'].tolist()
+        sequences_to_plot = {
+            **{f'Rank {i+1}': seq for i, seq in enumerate(top_peptides)},
+            **self.native_sequences
         }
         
-        top_20_seqs = self.df.head(20)['sequence'].tolist()
-        
-        for seq_idx, seq in enumerate(top_20_seqs):
+        # Parse sequences into tokens and find max length
+        parsed_sequences = {}
+        max_len = 0
+        for label, seq in sequences_to_plot.items():
             tokens = self._parse_sequence_with_nsaa(seq)
+            parsed_sequences[label] = tokens
+            max_len = max(max_len, len(tokens))
+
+        # Pad sequences to the same length for alignment
+        alignment_data = []
+        sequence_labels = []
+        for label, tokens in parsed_sequences.items():
+            padded_tokens = tokens + ['-'] * (max_len - len(tokens))
+            alignment_data.append(padded_tokens)
+            sequence_labels.append(label)
+
+        # --- Conservation Score Calculation ---
+        # This loop is specifically for the bar chart.
+        # It counts how many of the top 20 peptides match at least one native sequence at each position.
+        conservation_scores = [0] * max_len
+        top_peptide_labels = [f'Rank {i+1}' for i in range(top_peptides_count)]
+        native_labels = ['GLP1', 'GIP', 'Glucagon']
+
+        for j in range(max_len):
+            match_count = 0
+            for peptide_label in top_peptide_labels:
+                if peptide_label not in parsed_sequences:
+                    continue
+
+                peptide_token = parsed_sequences[peptide_label][j] if j < len(parsed_sequences[peptide_label]) else '-'
+                
+                # Convert NSAA to standard AA
+                peptide_aa = peptide_token
+                if peptide_token.startswith('[') and peptide_token.endswith(']'):
+                    peptide_aa = self.nsaa_mapping.get(peptide_token, 'X')
+                
+                is_conserved = False
+                for native_label in native_labels:
+                    if native_label not in parsed_sequences:
+                        continue
+
+                    native_token = parsed_sequences[native_label][j] if j < len(parsed_sequences[native_label]) else '-'
+                    
+                    # Convert native NSAA to standard AA
+                    native_aa = native_token
+                    if native_token.startswith('[') and native_token.endswith(']'):
+                        native_aa = self.nsaa_mapping.get(native_token, 'X')
+
+                    if peptide_aa == native_aa and peptide_aa != '-':
+                        is_conserved = True
+                        break
+                
+                if is_conserved:
+                    match_count += 1
             
-            for pos, token in enumerate(tokens):
-                # Convert NSAA to standard for comparison
-                if token.startswith('[') and token.endswith(']'):
-                    if token.startswith('[K('):
-                        aa = 'K'
-                    elif token in self.nsaa_mapping:
-                        aa = self.nsaa_mapping[token]
-                    else:
-                        aa = 'A'
+            conservation_scores[j] = match_count
+
+        # --- Plotting the figure with two subplots ---
+        fig = plt.figure(figsize=(18, 10))
+        gs = GridSpec(2, 1, height_ratios=[4, 1], hspace=0.1)
+        
+        # Top subplot for the alignment grid
+        ax_align = fig.add_subplot(gs[0])
+        # Bottom subplot for the bar chart, sharing the x-axis with the top plot
+        ax_bar = fig.add_subplot(gs[1], sharex=ax_align)
+        plt.style.use('seaborn-v0_8-whitegrid')
+
+        # Plot the alignment grid on the top subplot
+        for i, (label, tokens) in enumerate(zip(sequence_labels, alignment_data)):
+            for j, token in enumerate(tokens):
+                if label.startswith('Rank'):
+                    # For peptides, determine color based on conservation to natives
+                    matches = 0
+                    for native_label in native_labels:
+                        # Check if the native sequence exists at this position
+                        if j < len(parsed_sequences[native_label]):
+                            native_token = parsed_sequences[native_label][j]
+                        else:
+                            native_token = '-'
+
+                        peptide_aa = token
+                        if token.startswith('[') and token.endswith(']'):
+                            peptide_aa = self.nsaa_mapping.get(token, 'X')
+                        
+                        native_aa = native_token
+                        if native_token.startswith('[') and native_token.endswith(']'):
+                            native_aa = self.nsaa_mapping.get(native_token, 'X')
+
+                        if peptide_aa == native_aa and peptide_aa != '-':
+                            matches += 1
+
+                    # Re-run the color key logic for the top 20 peptides
+                    color_key = 'unique'
+                    if matches == 3: color_key = 'all_three'
+                    elif matches == 2:
+                        is_glp1_glucagon = (j < len(parsed_sequences['GLP1']) and parsed_sequences['GLP1'][j] == peptide_aa and 
+                                        j < len(parsed_sequences['Glucagon']) and parsed_sequences['Glucagon'][j] == peptide_aa)
+                        is_gip_glucagon = (j < len(parsed_sequences['GIP']) and parsed_sequences['GIP'][j] == peptide_aa and 
+                                        j < len(parsed_sequences['Glucagon']) and parsed_sequences['Glucagon'][j] == peptide_aa)
+                        is_glp1_gip = (j < len(parsed_sequences['GLP1']) and parsed_sequences['GLP1'][j] == peptide_aa and 
+                                    j < len(parsed_sequences['GIP']) and parsed_sequences['GIP'][j] == peptide_aa)
+                        if is_glp1_glucagon: color_key = 'glp1_glucagon'
+                        elif is_gip_glucagon: color_key = 'gip_glucagon'
+                        elif is_glp1_gip: color_key = 'glp1_gip'
+                    elif matches == 1:
+                        is_glp1 = j < len(parsed_sequences['GLP1']) and parsed_sequences['GLP1'][j] == peptide_aa
+                        is_gip = j < len(parsed_sequences['GIP']) and parsed_sequences['GIP'][j] == peptide_aa
+                        is_glucagon = j < len(parsed_sequences['Glucagon']) and parsed_sequences['Glucagon'][j] == peptide_aa
+                        if is_glp1: color_key = 'glp1_only'
+                        elif is_gip: color_key = 'gip_only'
+                        elif is_glucagon: color_key = 'glucagon_only'
                 else:
-                    aa = token
+                    # For native sequences, use a simple gap color
+                    color_key = 'gap'
                 
-                # Get native AAs at this position
-                native_aas = {}
-                for native_label in ['GLP1', 'GIP', 'Glucagon']:
-                    if native_label in self.native_sequences:
-                        native_tokens = self._parse_sequence_with_nsaa(self.native_sequences[native_label])
-                        if pos < len(native_tokens):
-                            native_token = native_tokens[pos]
-                            if native_token.startswith('[') and native_token.endswith(']'):
-                                if native_token.startswith('[K('):
-                                    native_aas[native_label] = 'K'
-                                elif native_token in self.nsaa_mapping:
-                                    native_aas[native_label] = self.nsaa_mapping[native_token]
-                                else:
-                                    native_aas[native_label] = 'A'
-                            else:
-                                native_aas[native_label] = native_token
+                color = color_map.get(color_key, 'white')
                 
-                # Count matches
-                matches = []
-                for native_label, native_aa in native_aas.items():
-                    if aa == native_aa:
-                        matches.append(native_label)
+                rect = plt.Rectangle((j, i), 1, 1, facecolor=color, edgecolor='#C0C0C0', linewidth=0.5)
+                ax_align.add_patch(rect)
                 
-                # Categorize pattern
-                if len(matches) == 3:
-                    pattern_counts['all_three'] += 1
-                elif len(matches) == 2:
-                    if 'GLP1' in matches and 'Glucagon' in matches:
-                        pattern_counts['glp1_glucagon'] += 1
-                    elif 'GIP' in matches and 'Glucagon' in matches:
-                        pattern_counts['gip_glucagon'] += 1
-                    elif 'GLP1' in matches and 'GIP' in matches:
-                        pattern_counts['glp1_gip'] += 1
-                elif len(matches) == 1:
-                    if 'GLP1' in matches:
-                        pattern_counts['glp1_only'] += 1
-                    elif 'GIP' in matches:
-                        pattern_counts['gip_only'] += 1
-                    elif 'Glucagon' in matches:
-                        pattern_counts['glucagon_only'] += 1
-                else:
-                    pattern_counts['unique'] += 1
+                if token != '-':
+                    display_token = self.nsaa_display.get(token, token)
+                    text_color = 'black'
+                    if color_key in ['all_three', 'glucagon_only']:
+                        text_color = 'white'
+                    ax_align.text(j + 0.5, i + 0.5, display_token, ha='center', va='center',
+                                    fontsize=8, weight='bold', color=text_color)
         
-        # Print statistics
-        total_positions = sum(pattern_counts.values())
+        ax_align.set_xlim(0, max_len)
+        ax_align.set_ylim(0, len(sequence_labels))
+        ax_align.set_aspect('equal', adjustable='box')
+        ax_align.set_yticks([i + 0.5 for i in range(len(sequence_labels))])
+        ax_align.set_yticklabels([label.replace('_', ' ') for label in sequence_labels], va='center', fontsize=9)
+        ax_align.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+        ax_align.set_title(f'Alignment of Top {top_peptides_count} Peptides to Native Sequences', fontsize=16, weight='bold', pad=20)
         
-        print(f"Total analyzed positions: {total_positions}")
-        print(f"All 3 natives:     {pattern_counts['all_three']:4d} ({100*pattern_counts['all_three']/total_positions:5.1f}%)")
-        print(f"GLP1 + Glucagon:   {pattern_counts['glp1_glucagon']:4d} ({100*pattern_counts['glp1_glucagon']/total_positions:5.1f}%)")
-        print(f"GIP + Glucagon:    {pattern_counts['gip_glucagon']:4d} ({100*pattern_counts['gip_glucagon']/total_positions:5.1f}%)")
-        print(f"GLP1 + GIP:        {pattern_counts['glp1_gip']:4d} ({100*pattern_counts['glp1_gip']/total_positions:5.1f}%)")
-        print(f"GLP1 only:         {pattern_counts['glp1_only']:4d} ({100*pattern_counts['glp1_only']/total_positions:5.1f}%)")
-        print(f"GIP only:          {pattern_counts['gip_only']:4d} ({100*pattern_counts['gip_only']/total_positions:5.1f}%)")
-        print(f"Glucagon only:     {pattern_counts['glucagon_only']:4d} ({100*pattern_counts['glucagon_only']/total_positions:5.1f}%)")
-        print(f"Unique:            {pattern_counts['unique']:4d} ({100*pattern_counts['unique']/total_positions:5.1f}%)")
+        # Plot the bar chart on the bottom subplot
+        ax_bar.bar(range(max_len), conservation_scores, color='#006400', edgecolor='none')
+        ax_bar.set_xlim(0, max_len)
+        ax_bar.set_xticks(range(max_len))
+        ax_bar.set_xticklabels([str(pos + 1) for pos in range(max_len)], fontsize=8)
+        ax_bar.set_xlabel('Sequence Position', fontsize=12, weight='bold')
+        ax_bar.set_ylabel('Num. Peptides Conserved', fontsize=10, weight='bold')
+        ax_bar.set_ylim(0, top_peptides_count) # Y-axis scale up to 20 for the number of peptides
+        ax_bar.set_title('Conservation Score per Position', fontsize=12, pad=10)
+
+        # Add a single legend for the entire figure
+        legend_elements = [
+            mpatches.Patch(color=color_map['all_three'], label='All 3 Natives'),
+            mpatches.Patch(color=color_map['glp1_gip'], label='GLP-1 & GIP'),
+            mpatches.Patch(color=color_map['glp1_glucagon'], label='GLP-1 & Glucagon'),
+            mpatches.Patch(color=color_map['gip_glucagon'], label='GIP & Glucagon'),
+            mpatches.Patch(color=color_map['glp1_only'], label='GLP-1 Only'),
+            mpatches.Patch(color=color_map['gip_only'], label='GIP Only'),
+            mpatches.Patch(color=color_map['glucagon_only'], label='Glucagon Only'),
+            mpatches.Patch(color=color_map['unique'], label='Unique')
+        ]
         
+        # Place the legend outside the plots
+        fig.legend(handles=legend_elements, title='Conservation Pattern', 
+                bbox_to_anchor=(0.85, 0.95), loc='upper left', fontsize=10, title_fontsize=12, frameon=False)
+
+        plt.tight_layout(rect=[0, 0, 0.85, 1])
+        plt.savefig(self.output_dir / 'hybrid_visualization.png', dpi=600, bbox_inches='tight')
+        plt.close()
+        
+        print("Hybrid visualization saved successfully.")
+
+
+
     def calculate_molecular_properties(self):
         """Calculate molecular properties for all sequences."""
         print("\nCalculating molecular properties...")
@@ -800,6 +1035,14 @@ class PeptideAnalyzer:
                         report.append(f"- {metric.replace('avg_', '').title()}: {value:.3f}")
                 report.append("")
         
+            if 'similarity_analysis' in self.results:
+                sim_data = self.results['similarity_analysis']['per_peptide_similarities']
+                report.append("## Sequence Similarity to Training Data\n")
+                report.append("### Per-Peptide Highest Similarity Matches")
+                for result in sim_data:
+                    report.append(f"- Peptide {result['peptide_rank']}: {result['highest_similarity_percent']:.1f}% similarity to {result['best_match_id']}")
+                report.append("")
+        
         # Conserved Motifs
         if 'conserved_motifs' in self.results:
             motifs = self.results['conserved_motifs']['motifs']
@@ -826,6 +1069,7 @@ class PeptideAnalyzer:
                 report.append(f"- {row['rank']}: MW={row['molecular_weight']:.1f} Da, "
                             f"LogP={row['estimated_logP']:.2f}, PSA={row['estimated_PSA']:.1f} Ų")
             report.append("")
+
         
         # Top sequences
         report.append("## Top 10 Sequences\n")
@@ -855,8 +1099,10 @@ class PeptideAnalyzer:
         self.descriptive_statistics()
         self.find_conserved_motifs()
         self.create_sequence_alignment_visualization()
+        self.generate_hybrid_visualization()
         self.calculate_molecular_properties()
         self.create_property_visualizations()
+        self.analyze_sequence_similarity_to_training()
         self.generate_summary_report()
         
         print(f"\nAnalysis complete! Results saved to: {self.output_dir}")
